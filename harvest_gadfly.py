@@ -12,6 +12,7 @@ from trove_python.trove_harvest.harvest import TroveHarvester
 QUERY = 'http://api.trove.nla.gov.au/result?q=firstpageseq:1&zone=newspaper&encoding=json&l-title=898&reclevel=full'
 IMAGE_URL = 'http://trove.nla.gov.au/ndp/imageservice/nla.news-page{}/level3'
 PAGE_URL = 'http://nla.gov.au/nla.news-page{}'
+GITHUB_URL = 'https://raw.githubusercontent.com/wragge/gadfly-demo/master/images/{}.jpg'
 
 
 class GadflyHarvester(TroveHarvester):
@@ -55,11 +56,13 @@ def get_images():
         writer = csv.writer(pages_file)
         writer.writerow(['date', 'id', 'title', 'url', 'image_url'])
         for page in pages:
+            # This rewrites the image url for import into Omeka (needs a file extension)
+            page[4] = GITHUB_URL.format(page[1])
             writer.writerow(page)
-            # urlretrieve(page[4], 'images/{}.jpg'.format(page[1]))
+            urlretrieve(page[4], 'images/{}.jpg'.format(page[1]))
 
 
-def start_harvest(key='6pi5hht0d2umqcro', query=QUERY):
+def start_harvest(key, query=QUERY):
     trove_api = trove.Trove(key)
     harvester = GadflyHarvester(trove_api, query=QUERY)
     harvester.harvest()
