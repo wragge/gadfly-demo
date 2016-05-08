@@ -23,6 +23,7 @@ class GadflyHarvester(TroveHarvester):
     def process_results(self, results):
         try:
             articles = results[0]['records']['article']
+            # Write results to a CSV file
             with open('results.csv', 'ab') as results_file:
                 writer = csv.writer(results_file)
                 for article in articles:
@@ -46,12 +47,15 @@ def get_images():
     Remove duplicate pages from results, sort them, write to a new file, and download images.
     """
     pages = []
+    # Remove duplicates
     with open('results.csv', 'rb') as results_file:
         reader = csv.reader(results_file)
         for row in reader:
             if row not in pages:
                 pages.append(row)
+    # Sort by date
     pages = sorted(pages, key=itemgetter(0))
+    # Write to a new CSV file
     with open('pages.csv', 'wb') as pages_file:
         writer = csv.writer(pages_file)
         writer.writerow(['date', 'id', 'title', 'url', 'image_url'])
@@ -59,6 +63,7 @@ def get_images():
             # This rewrites the image url for import into Omeka (needs a file extension)
             page[4] = GITHUB_URL.format(page[1])
             writer.writerow(page)
+            # Download the images
             urlretrieve(page[4], 'images/{}.jpg'.format(page[1]))
 
 
