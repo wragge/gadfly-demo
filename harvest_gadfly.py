@@ -23,6 +23,8 @@ class GadflyHarvester(TroveHarvester):
     Defines process_results() to download page images.
     """
 
+    page_ids = []
+
     def process_results(self, results):
 
         """
@@ -35,7 +37,6 @@ class GadflyHarvester(TroveHarvester):
             articles = results[0]['records']['article']
             # Check to see if images directory exists
             images_dir = make_images_dir()
-            page_ids = []
             # Write results to a CSV file
             with open('results.csv', 'ab') as results_file:
                 writer = csv.writer(results_file)
@@ -43,8 +44,8 @@ class GadflyHarvester(TroveHarvester):
                     # Get the page id from trovePageUrl
                     page_id = re.search(r'page\/(\d+)', article['trovePageUrl']).group(1)
                     # Check for duplicate ids
-                    if page_id not in page_ids:
-                        page_ids.append(page_id)
+                    if page_id not in self.page_ids:
+                        self.page_ids.append(page_id)
                         # Format the page image url
                         image_url = IMAGE_URL.format(page_id)
                         # Parse date and format a nice title for the CSV file
@@ -71,7 +72,7 @@ def make_images_dir(path='images'):
     Checks to see if the supplied directory exists in the current working directory.
     Creates it if it doens't. Returns the full path.
     """
-    
+
     images_dir = os.path.join(os.getcwd(), path)
     try:
         os.makedirs(images_dir)
