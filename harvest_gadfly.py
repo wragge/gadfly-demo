@@ -1,73 +1,90 @@
-# We're going to harvest images of front pages from the SA newspaper Gadfly.
-
 import re
 import time
 import csv
-from operator import itemgetter
+import os
 from urllib import urlretrieve
 from dateutil.parser import parse
 from trove_python.trove_core import trove
 from trove_python.trove_harvest.harvest import TroveHarvester
 
-QUERY = 'http://api.trove.nla.gov.au/result?q=firstpageseq:1&zone=newspaper&encoding=json&l-title=898&reclevel=full'
+# The API query we're going to use (minus the API key).
+# The 'q=firstpageseq:1' says to return articles on the front page.
+QUERY = 'http://api.trove.nla.gov.au/result?q=firstpageseq:1&zone=newspaper&encoding=json&l-title=898&reclevel=full&sortby=dateAsc'
+# This is how URLs to page images are constucted (insert page id).
+# Higher level values (eg level4) give higher res images.
 IMAGE_URL = 'http://trove.nla.gov.au/ndp/imageservice/nla.news-page{}/level3'
+# Page identifier
 PAGE_URL = 'http://nla.gov.au/nla.news-page{}'
-GITHUB_URL = 'https://raw.githubusercontent.com/wragge/gadfly-demo/master/images/{}.jpg'
 
 
 class GadflyHarvester(TroveHarvester):
-
-    # Need to get results for articles on page 1
-    # Then get ids for the page
+    """
+    Subclass of TroveHarvester.
+    Defines process_results() to download page images.
+    """
 
     def process_results(self, results):
+
+        """
+        Process a set of results.
+        Identify page ids and download page images.
+        Save details to a CSV file.
+        """
+
         try:
             articles = results[0]['records']['article']
+            # Check to see if images directory exists
+            images_dir = make_images_dir()
+            page_ids = []
             # Write results to a CSV file
             with open('results.csv', 'ab') as results_file:
                 writer = csv.writer(results_file)
                 for article in articles:
-                    # We want the date and the page id
+                    # Get the page id from trovePageUrl
                     page_id = re.search(r'page\/(\d+)', article['trovePageUrl']).group(1)
-                    image = IMAGE_URL.format(page_id)
-                    date = parse(article['date'])
-                    title = "The Gadfly, {:%e %B %Y}".format(date)
-                    url = PAGE_URL.format(page_id)
-                    writer.writerow([article['date'], page_id, title, url, image])
-
+                    # Check for duplicate ids
+                    if page_id not in page_ids:
+                        page_ids.append(page_id)
+                        # Format the page image url
+                        image_url = IMAGE_URL.format(page_id)
+                        # Parse date and format a nice title for the CSV file
+                        date = parse(article['date'])
+                        title = "The Gadfly, {:%e %B %Y}".format(date)
+                        # Format the persistent link for the page in Trove
+                        url = PAGE_URL.format(page_id)
+                        # Format the image filename and download the page image
+                        image_filename = '{}-{}.jpg'.format(article['date'], page_id)
+                        urlretrieve(image_url, os.path.join(images_dir, image_filename))
+                        # Write data to the CSV file
+                        writer.writerow([article['date'], page_id, title, url, image_filename])
+            # Give the Trove API a break
             time.sleep(0.5)
+            # Update the harvester so it knows where it's up to.
             self.harvested += self.get_highest_n(results)
             print('Harvested: {}'.format(self.harvested))
         except KeyError:
             pass
 
+def make_images_dir(path='images'):
 
-def get_images():
     """
-    Remove duplicate pages from results, sort them, write to a new file, and download images.
+    Checks to see if the supplied directory exists in the current working directory.
+    Creates it if it doens't. Returns the full path.
     """
-    pages = []
-    # Remove duplicates
-    with open('results.csv', 'rb') as results_file:
-        reader = csv.reader(results_file)
-        for row in reader:
-            if row not in pages:
-                pages.append(row)
-    # Sort by date
-    pages = sorted(pages, key=itemgetter(0))
-    # Write to a new CSV file
-    with open('pages.csv', 'wb') as pages_file:
-        writer = csv.writer(pages_file)
-        writer.writerow(['date', 'id', 'title', 'url', 'image_url'])
-        for page in pages:
-            # This rewrites the image url for import into Omeka (needs a file extension)
-            page[4] = GITHUB_URL.format(page[1])
-            writer.writerow(page)
-            # Download the images
-            urlretrieve(page[4], 'images/{}.jpg'.format(page[1]))
+    
+    images_dir = os.path.join(os.getcwd(), path)
+    try:
+        os.makedirs(images_dir)
+    except OSError:
+        if not os.path.isdir(images_dir):
+            raise
+    return images_dir
 
 
 def start_harvest(key, query=QUERY):
+    # Initialise a Trove class with an API key
     trove_api = trove.Trove(key)
+    # Initialise harvester subclass
     harvester = GadflyHarvester(trove_api, query=QUERY)
+    # Start harvest
     harvester.harvest()
